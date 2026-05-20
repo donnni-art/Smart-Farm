@@ -1,0 +1,1221 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Smart Farm Monitor</title>
+  <meta name="theme-color" content="#22c55e">
+  <link rel="manifest" href="manifest.json">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="css/dashboard.css">
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <span class="logo-icon">🌿</span>
+    Smart Farm Monitor
+  </div>
+  <div style="display:flex;gap:8px;">
+    <a href="index.html" style="padding:6px 14px;border-radius:8px;font-size:0.82rem;font-weight:600;text-decoration:none;color:#e2e8f0;background:#243447;border:1px solid #243447;">📊 Dashboard</a>
+    <a href="flow.html"  style="padding:6px 14px;border-radius:8px;font-size:0.82rem;font-weight:600;text-decoration:none;color:#64748b;background:transparent;border:1px solid transparent;">🔀 Flow</a>
+    <a href="guide.html" style="padding:6px 14px;border-radius:8px;font-size:0.82rem;font-weight:600;text-decoration:none;color:#64748b;background:transparent;border:1px solid transparent;">📖 คู่มือ</a>
+  </div>
+  <div class="header-right">
+    <div class="conn-wrap">
+      <div class="conn-badge" onclick="toggleQuickConnect()">
+        <span class="conn-dot"></span>
+        <span id="conn-badge-text">ESP32 Online (Mock)</span>
+        <span class="conn-badge-arr">▾</span>
+      </div>
+      <div class="quick-conn-panel" id="quick-conn-panel">
+        <div class="qcp-title">โหมดเชื่อมต่อ</div>
+        <div class="conn-mode-btns">
+          <button class="conn-mode-btn active" data-mode="sim"  onclick="selectConnMode('sim')">🎲 Simulation</button>
+          <button class="conn-mode-btn"        data-mode="ws"   onclick="selectConnMode('ws')">🔗 WebSocket</button>
+          <button class="conn-mode-btn"        data-mode="rest" onclick="selectConnMode('rest')">🌐 REST API</button>
+        </div>
+        <div class="conn-url-row" id="qcp-url-row" style="display:none">
+          <input type="text" class="conn-url-input" id="qcp-url" placeholder="ws://192.168.1.100/ws">
+        </div>
+        <button class="conn-apply-btn" style="width:100%;margin-top:4px" onclick="applyQuickConnect()">🔌 เชื่อมต่อ</button>
+      </div>
+    </div>
+    <button class="theme-btn" id="notifBtn" onclick="toggleNotifications()">🔕 แจ้งเตือน</button>
+    <div class="layout-wrap">
+      <button class="theme-btn" id="layout-btn" onclick="toggleLayoutPanel()">📐 Layout</button>
+      <div class="layout-panel" id="layout-panel">
+        <div class="layout-title">ซ่อน/แสดง Section</div>
+        <div class="layout-list" id="layout-list"></div>
+      </div>
+    </div>
+    <button class="theme-btn" id="themeBtn" onclick="toggleTheme()">☀️ Light</button>
+    <div class="clock" id="clock">--:--:--</div>
+  </div>
+</header>
+
+<main>
+
+  <!-- ESP32 Info -->
+  <div data-section="esp-status">
+  <div class="section-title">สถานะอุปกรณ์</div>
+  <div class="esp-status">
+    <div class="esp-card">
+      <span class="esp-icon">📡</span>
+      <div>
+        <div class="esp-info-label">WiFi Signal (RSSI)</div>
+        <div class="esp-info-value" id="esp-rssi">-62 dBm</div>
+      </div>
+    </div>
+    <div class="esp-card">
+      <span class="esp-icon">🔋</span>
+      <div>
+        <div class="esp-info-label">Power Supply</div>
+        <div class="esp-info-value" id="esp-volt" style="color:var(--green)">5.0 V</div>
+      </div>
+    </div>
+    <div class="esp-card">
+      <span class="esp-icon">⏱️</span>
+      <div>
+        <div class="esp-info-label">Uptime</div>
+        <div class="esp-info-value" id="esp-uptime">00:00:00</div>
+      </div>
+    </div>
+    <div class="esp-card">
+      <span class="esp-icon">📤</span>
+      <div>
+        <div class="esp-info-label">Last Telemetry</div>
+        <div class="esp-info-value" id="last-send" style="color:var(--cyan)">เพิ่งส่ง</div>
+      </div>
+    </div>
+  </div>
+
+  </div><!-- /esp-status -->
+
+  <!-- Weather Widget -->
+  <div data-section="weather">
+  <div class="section-title">สภาพอากาศ</div>
+  <div class="weather-card">
+    <div class="wx-main">
+      <div class="wx-icon" id="wx-icon">⏳</div>
+      <div>
+        <div class="wx-temp" id="wx-temp">-- °C</div>
+        <div class="wx-desc" id="wx-desc">กำลังโหลด...</div>
+      </div>
+    </div>
+    <div class="wx-details">
+      <div class="wx-detail"><span>💧</span><span id="wx-humid">--%</span></div>
+      <div class="wx-detail"><span>💨</span><span id="wx-wind">-- km/h</span></div>
+      <div class="wx-detail"><span>☁️</span><span id="wx-clouds">--%</span></div>
+    </div>
+    <div class="wx-location" id="wx-location">--</div>
+    <div class="wx-updated" id="wx-updated">--</div>
+  </div>
+
+  </div><!-- /weather -->
+
+  <!-- Zone Overview -->
+  <div data-section="zones">
+  <div class="section-title">Zone Overview</div>
+  <div class="zone-grid">
+
+    <!-- ── Zone 1 — แปลงผัก A ── -->
+    <div class="zone-card z1" id="valve-1-card">
+      <div class="zone-hd">
+        <div class="zone-hd-left">
+          <div class="zone-badge z1">Z1</div>
+          <div>
+            <div class="zone-title">แปลงผัก A</div>
+            <div class="zone-sub">2 อุปกรณ์ · Auto-irrigation</div>
+          </div>
+        </div>
+        <span class="zone-health health-ok" id="zone1-health">ปกติ</span>
+      </div>
+      <div class="zone-devices">
+        <div class="zdev-row">
+          <div class="zdev-left">
+            <span class="zdev-icon">💧</span>
+            <div>
+              <div class="zdev-name">ความชื้นดิน</div>
+              <div class="zdev-proto">Capacitive · Analog</div>
+            </div>
+          </div>
+          <div class="zdev-mid">
+            <div class="zdev-val" id="soil1-val">--<span class="card-unit">%</span></div>
+            <div class="progress-bar" style="margin:6px 0 4px"><div class="progress-fill fill-green" id="soil1-bar" style="width:0%"></div></div>
+            <div class="card-status status-ok" id="soil1-status"><span class="status-dot"></span>ปกติ</div>
+          </div>
+          <div class="zdev-spark"><canvas id="spark-soil1"></canvas></div>
+        </div>
+        <div class="zdev-row zdev-valve-row">
+          <div class="zdev-left">
+            <span class="zdev-icon">🚿</span>
+            <div>
+              <div class="zdev-name">วาล์ว 1</div>
+              <div class="zdev-proto zdev-mode" id="v1-mode">อัตโนมัติ</div>
+            </div>
+          </div>
+          <div class="zdev-valve-ctrl">
+            <label class="toggle">
+              <input type="checkbox" id="v1" onchange="manualValve(0, this.checked)">
+              <span class="slider"></span>
+            </label>
+            <span class="toggle-label" id="v1-label">ปิด</span>
+            <span class="timer-display" id="v1-timer-display"></span>
+          </div>
+        </div>
+        <div class="zone-actions">
+          <div class="timer-row">
+            <input type="number" class="timer-input" id="v1-timer-input" min="0.5" max="120" step="0.5" placeholder="นาที">
+            <button class="timer-btn" onclick="startValveTimer(0)">⏱ ตั้งเวลา</button>
+          </div>
+          <button class="reset-auto-btn" id="v1-reset" onclick="resetToAuto(0)" disabled>↺ คืนค่า Auto</button>
+        </div>
+        <div class="zone-stats">
+          <span class="zone-stat-item">เปิดล่าสุด <b id="v1-last">--</b></span>
+          <span class="zone-stat-item">รดน้ำวันนี้ <b id="v1-count">0</b> ครั้ง</span>
+        </div>
+        <div class="zone-add-row" onclick="openPluginModal(0)">
+          <span class="zone-add-icon">＋</span> เพิ่ม Sensor
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Zone 2 — แปลงผัก B ── -->
+    <div class="zone-card z2" id="valve-2-card">
+      <div class="zone-hd">
+        <div class="zone-hd-left">
+          <div class="zone-badge z2">Z2</div>
+          <div>
+            <div class="zone-title">แปลงผัก B</div>
+            <div class="zone-sub">2 อุปกรณ์ · Auto-irrigation</div>
+          </div>
+        </div>
+        <span class="zone-health health-ok" id="zone2-health">ปกติ</span>
+      </div>
+      <div class="zone-devices">
+        <div class="zdev-row">
+          <div class="zdev-left">
+            <span class="zdev-icon">💧</span>
+            <div>
+              <div class="zdev-name">ความชื้นดิน</div>
+              <div class="zdev-proto">Capacitive · Analog</div>
+            </div>
+          </div>
+          <div class="zdev-mid">
+            <div class="zdev-val" id="soil2-val">--<span class="card-unit">%</span></div>
+            <div class="progress-bar" style="margin:6px 0 4px"><div class="progress-fill fill-green" id="soil2-bar" style="width:0%"></div></div>
+            <div class="card-status status-ok" id="soil2-status"><span class="status-dot"></span>ปกติ</div>
+          </div>
+          <div class="zdev-spark"><canvas id="spark-soil2"></canvas></div>
+        </div>
+        <div class="zdev-row zdev-valve-row">
+          <div class="zdev-left">
+            <span class="zdev-icon">🚿</span>
+            <div>
+              <div class="zdev-name">วาล์ว 2</div>
+              <div class="zdev-proto zdev-mode" id="v2-mode">อัตโนมัติ</div>
+            </div>
+          </div>
+          <div class="zdev-valve-ctrl">
+            <label class="toggle">
+              <input type="checkbox" id="v2" onchange="manualValve(1, this.checked)">
+              <span class="slider"></span>
+            </label>
+            <span class="toggle-label" id="v2-label">ปิด</span>
+            <span class="timer-display" id="v2-timer-display"></span>
+          </div>
+        </div>
+        <div class="zone-actions">
+          <div class="timer-row">
+            <input type="number" class="timer-input" id="v2-timer-input" min="0.5" max="120" step="0.5" placeholder="นาที">
+            <button class="timer-btn" onclick="startValveTimer(1)">⏱ ตั้งเวลา</button>
+          </div>
+          <button class="reset-auto-btn" id="v2-reset" onclick="resetToAuto(1)" disabled>↺ คืนค่า Auto</button>
+        </div>
+        <div class="zone-stats">
+          <span class="zone-stat-item">เปิดล่าสุด <b id="v2-last">--</b></span>
+          <span class="zone-stat-item">รดน้ำวันนี้ <b id="v2-count">0</b> ครั้ง</span>
+        </div>
+        <div class="zone-add-row" onclick="openPluginModal(1)">
+          <span class="zone-add-icon">＋</span> เพิ่ม Sensor
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Zone 3 — ต้นไม้รอบรั้ว ── -->
+    <div class="zone-card z3" id="valve-3-card">
+      <div class="zone-hd">
+        <div class="zone-hd-left">
+          <div class="zone-badge z3">Z3</div>
+          <div>
+            <div class="zone-title">ต้นไม้รอบรั้ว</div>
+            <div class="zone-sub">1 อุปกรณ์ · Manual</div>
+          </div>
+        </div>
+        <span class="zone-health health-ok" id="zone3-health">ปกติ</span>
+      </div>
+      <div class="zone-devices">
+        <div class="zdev-row zdev-valve-row" style="border-top:none">
+          <div class="zdev-left">
+            <span class="zdev-icon">🚿</span>
+            <div>
+              <div class="zdev-name">วาล์ว 3</div>
+              <div class="zdev-proto">Relay · 12VDC · Manual</div>
+            </div>
+          </div>
+          <div class="zdev-valve-ctrl">
+            <label class="toggle">
+              <input type="checkbox" id="v3" onchange="manualValve(2, this.checked)">
+              <span class="slider"></span>
+            </label>
+            <span class="toggle-label" id="v3-label">ปิด</span>
+            <span class="timer-display" id="v3-timer-display"></span>
+          </div>
+        </div>
+        <div class="zone-actions">
+          <div class="timer-row">
+            <input type="number" class="timer-input" id="v3-timer-input" min="0.5" max="120" step="0.5" placeholder="นาที">
+            <button class="timer-btn" onclick="startValveTimer(2)">⏱ ตั้งเวลา</button>
+          </div>
+        </div>
+        <div class="zone-stats">
+          <span class="zone-stat-item">เปิดล่าสุด <b id="v3-last">--</b></span>
+          <span class="zone-stat-item">รดน้ำวันนี้ <b id="v3-count">0</b> ครั้ง</span>
+        </div>
+        <div class="zone-add-row" onclick="openPluginModal(2)">
+          <span class="zone-add-icon">＋</span> เพิ่ม Sensor
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Zone 4 — สนามหญ้า ── -->
+    <div class="zone-card z4" id="valve-4-card">
+      <div class="zone-hd">
+        <div class="zone-hd-left">
+          <div class="zone-badge z4">Z4</div>
+          <div>
+            <div class="zone-title">สนามหญ้า</div>
+            <div class="zone-sub">1 อุปกรณ์ · Manual</div>
+          </div>
+        </div>
+        <span class="zone-health health-ok" id="zone4-health">ปกติ</span>
+      </div>
+      <div class="zone-devices">
+        <div class="zdev-row zdev-valve-row" style="border-top:none">
+          <div class="zdev-left">
+            <span class="zdev-icon">🚿</span>
+            <div>
+              <div class="zdev-name">วาล์ว 4</div>
+              <div class="zdev-proto">Relay · 12VDC · Manual</div>
+            </div>
+          </div>
+          <div class="zdev-valve-ctrl">
+            <label class="toggle">
+              <input type="checkbox" id="v4" onchange="manualValve(3, this.checked)">
+              <span class="slider"></span>
+            </label>
+            <span class="toggle-label" id="v4-label">ปิด</span>
+            <span class="timer-display" id="v4-timer-display"></span>
+          </div>
+        </div>
+        <div class="zone-actions">
+          <div class="timer-row">
+            <input type="number" class="timer-input" id="v4-timer-input" min="0.5" max="120" step="0.5" placeholder="นาที">
+            <button class="timer-btn" onclick="startValveTimer(3)">⏱ ตั้งเวลา</button>
+          </div>
+        </div>
+        <div class="zone-stats">
+          <span class="zone-stat-item">เปิดล่าสุด <b id="v4-last">--</b></span>
+          <span class="zone-stat-item">รดน้ำวันนี้ <b id="v4-count">0</b> ครั้ง</span>
+        </div>
+        <div class="zone-add-row" onclick="openPluginModal(3)">
+          <span class="zone-add-icon">＋</span> เพิ่ม Sensor
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  </div><!-- /zones -->
+
+  <!-- Growth Analysis -->
+  <div data-section="growth">
+  <div class="section-title" style="margin-top:28px">🌱 วิเคราะห์การเจริญเติบโตของพืช</div>
+
+  <!-- Farm Health Summary Bar -->
+  <div class="farm-health-bar">
+    <div class="fhb-left">
+      <span class="fhb-icon">🌾</span>
+      <div>
+        <div class="fhb-title">สุขภาพฟาร์มโดยรวม</div>
+        <div class="fhb-progress"><div class="fhb-progress-fill" id="farm-health-bar-fill"></div></div>
+      </div>
+      <div class="fhb-score-wrap">
+        <span class="fhb-score" id="farm-health-score">--</span>
+        <span class="fhb-label" id="farm-health-label">กำลังวิเคราะห์...</span>
+      </div>
+    </div>
+    <div class="fhb-zones">
+      <div class="fhb-zone"><span class="fhb-zone-lbl">Z1</span><span class="fhb-zone-score" id="fhb-z1">--</span></div>
+      <div class="fhb-zone"><span class="fhb-zone-lbl">Z2</span><span class="fhb-zone-score" id="fhb-z2">--</span></div>
+      <div class="fhb-zone"><span class="fhb-zone-lbl">Z3</span><span class="fhb-zone-score" id="fhb-z3">--</span></div>
+      <div class="fhb-zone"><span class="fhb-zone-lbl">Z4</span><span class="fhb-zone-score" id="fhb-z4">--</span></div>
+    </div>
+  </div>
+
+  <div class="growth-grid">
+
+    <!-- Zone 1 -->
+    <div class="growth-card" id="g1-card">
+      <div class="growth-hd">
+        <div class="growth-hd-left">
+          <div class="zone-badge z1">Z1</div>
+          <div>
+            <div class="growth-title">แปลงผัก A</div>
+            <div class="growth-crop-row">
+              <span class="crop-icon" id="g1-crop-icon">🥬</span>
+              <select class="crop-sel" id="g1-crop-sel" onchange="setZoneCrop(0, this.value)">
+                <option value="vegetable">🥬 ผักทั่วไป</option>
+                <option value="tomato">🍅 มะเขือเทศ</option>
+                <option value="basil">🌿 กะเพรา/โหระพา</option>
+                <option value="chili">🌶️ พริก</option>
+                <option value="lettuce">🥗 ผักกาดหอม</option>
+                <option value="rice">🌾 ข้าว</option>
+                <option value="grass">🌱 สนามหญ้า</option>
+                <option value="tree">🌳 ต้นไม้ทั่วไป</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <span class="growth-badge" id="g1-badge">--</span>
+      </div>
+      <div class="growth-body">
+        <div class="growth-ring-wrap">
+          <svg viewBox="0 0 70 70" class="growth-svg">
+            <circle cx="35" cy="35" r="28" class="growth-ring-bg"/>
+            <circle cx="35" cy="35" r="28" class="growth-ring-fill" id="g1-ring"
+                    style="stroke-dasharray:0 175.9" transform="rotate(-90 35 35)"/>
+          </svg>
+          <div class="growth-ring-inner">
+            <div class="growth-score" id="g1-score">--</div>
+            <div class="growth-score-lbl">คะแนน</div>
+          </div>
+        </div>
+        <div class="growth-factors">
+          <div class="gf-row"><span class="gf-lbl">💧 ดิน</span><div class="gf-track"><div class="gf-fill" id="g1-soil-bar"></div></div><span class="gf-num" id="g1-soil-lbl">--</span></div>
+          <div class="gf-row"><span class="gf-lbl">🌡️ อุณหภูมิ</span><div class="gf-track"><div class="gf-fill" id="g1-temp-bar"></div></div><span class="gf-num" id="g1-temp-lbl">--</span></div>
+          <div class="gf-row"><span class="gf-lbl">🌫️ ความชื้น</span><div class="gf-track"><div class="gf-fill" id="g1-humid-bar"></div></div><span class="gf-num" id="g1-humid-lbl">--</span></div>
+          <div class="gf-row"><span class="gf-lbl">☀️ แสง</span><div class="gf-track"><div class="gf-fill" id="g1-light-bar"></div></div><span class="gf-num" id="g1-light-lbl">--</span></div>
+          <div class="gf-row"><span class="gf-lbl">🌱 อุณหภูมิดิน</span><div class="gf-track"><div class="gf-fill" id="g1-stemp-bar"></div></div><span class="gf-num" id="g1-stemp-lbl">--</span></div>
+        </div>
+      </div>
+      <div class="growth-recs" id="g1-recs"></div>
+    </div>
+
+    <!-- Zone 2 -->
+    <div class="growth-card" id="g2-card">
+      <div class="growth-hd">
+        <div class="growth-hd-left">
+          <div class="zone-badge z2">Z2</div>
+          <div>
+            <div class="growth-title">แปลงผัก B</div>
+            <div class="growth-crop-row">
+              <span class="crop-icon" id="g2-crop-icon">🥬</span>
+              <select class="crop-sel" id="g2-crop-sel" onchange="setZoneCrop(1, this.value)">
+                <option value="vegetable">🥬 ผักทั่วไป</option>
+                <option value="tomato">🍅 มะเขือเทศ</option>
+                <option value="basil">🌿 กะเพรา/โหระพา</option>
+                <option value="chili">🌶️ พริก</option>
+                <option value="lettuce">🥗 ผักกาดหอม</option>
+                <option value="rice">🌾 ข้าว</option>
+                <option value="grass">🌱 สนามหญ้า</option>
+                <option value="tree">🌳 ต้นไม้ทั่วไป</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <span class="growth-badge" id="g2-badge">--</span>
+      </div>
+      <div class="growth-body">
+        <div class="growth-ring-wrap">
+          <svg viewBox="0 0 70 70" class="growth-svg">
+            <circle cx="35" cy="35" r="28" class="growth-ring-bg"/>
+            <circle cx="35" cy="35" r="28" class="growth-ring-fill" id="g2-ring"
+                    style="stroke-dasharray:0 175.9" transform="rotate(-90 35 35)"/>
+          </svg>
+          <div class="growth-ring-inner">
+            <div class="growth-score" id="g2-score">--</div>
+            <div class="growth-score-lbl">คะแนน</div>
+          </div>
+        </div>
+        <div class="growth-factors">
+          <div class="gf-row"><span class="gf-lbl">💧 ดิน</span><div class="gf-track"><div class="gf-fill" id="g2-soil-bar"></div></div><span class="gf-num" id="g2-soil-lbl">--</span></div>
+          <div class="gf-row"><span class="gf-lbl">🌡️ อุณหภูมิ</span><div class="gf-track"><div class="gf-fill" id="g2-temp-bar"></div></div><span class="gf-num" id="g2-temp-lbl">--</span></div>
+          <div class="gf-row"><span class="gf-lbl">🌫️ ความชื้น</span><div class="gf-track"><div class="gf-fill" id="g2-humid-bar"></div></div><span class="gf-num" id="g2-humid-lbl">--</span></div>
+          <div class="gf-row"><span class="gf-lbl">☀️ แสง</span><div class="gf-track"><div class="gf-fill" id="g2-light-bar"></div></div><span class="gf-num" id="g2-light-lbl">--</span></div>
+          <div class="gf-row"><span class="gf-lbl">🌱 อุณหภูมิดิน</span><div class="gf-track"><div class="gf-fill" id="g2-stemp-bar"></div></div><span class="gf-num" id="g2-stemp-lbl">--</span></div>
+        </div>
+      </div>
+      <div class="growth-recs" id="g2-recs"></div>
+    </div>
+
+    <!-- Zone 3 -->
+    <div class="growth-card" id="g3-card">
+      <div class="growth-hd">
+        <div class="growth-hd-left">
+          <div class="zone-badge z3">Z3</div>
+          <div>
+            <div class="growth-title">ต้นไม้รอบรั้ว</div>
+            <div class="growth-crop-row">
+              <span class="crop-icon" id="g3-crop-icon">🌳</span>
+              <select class="crop-sel" id="g3-crop-sel" onchange="setZoneCrop(2, this.value)">
+                <option value="vegetable">🥬 ผักทั่วไป</option>
+                <option value="tomato">🍅 มะเขือเทศ</option>
+                <option value="basil">🌿 กะเพรา/โหระพา</option>
+                <option value="chili">🌶️ พริก</option>
+                <option value="lettuce">🥗 ผักกาดหอม</option>
+                <option value="rice">🌾 ข้าว</option>
+                <option value="grass">🌱 สนามหญ้า</option>
+                <option value="tree">🌳 ต้นไม้ทั่วไป</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <span class="growth-badge" id="g3-badge">--</span>
+      </div>
+      <div class="growth-body">
+        <div class="growth-ring-wrap">
+          <svg viewBox="0 0 70 70" class="growth-svg">
+            <circle cx="35" cy="35" r="28" class="growth-ring-bg"/>
+            <circle cx="35" cy="35" r="28" class="growth-ring-fill" id="g3-ring"
+                    style="stroke-dasharray:0 175.9" transform="rotate(-90 35 35)"/>
+          </svg>
+          <div class="growth-ring-inner">
+            <div class="growth-score" id="g3-score">--</div>
+            <div class="growth-score-lbl">คะแนน</div>
+          </div>
+        </div>
+        <div class="growth-factors">
+          <div class="gf-row"><span class="gf-lbl">💧 ดิน</span><div class="gf-track"><div class="gf-fill" id="g3-soil-bar" style="background:#334155;width:2%"></div></div><span class="gf-num" id="g3-soil-lbl">N/A</span></div>
+          <div class="gf-row"><span class="gf-lbl">🌡️ อุณหภูมิ</span><div class="gf-track"><div class="gf-fill" id="g3-temp-bar"></div></div><span class="gf-num" id="g3-temp-lbl">--</span></div>
+          <div class="gf-row"><span class="gf-lbl">🌫️ ความชื้น</span><div class="gf-track"><div class="gf-fill" id="g3-humid-bar"></div></div><span class="gf-num" id="g3-humid-lbl">--</span></div>
+          <div class="gf-row"><span class="gf-lbl">☀️ แสง</span><div class="gf-track"><div class="gf-fill" id="g3-light-bar"></div></div><span class="gf-num" id="g3-light-lbl">--</span></div>
+          <div class="gf-row"><span class="gf-lbl">🌱 อุณหภูมิดิน</span><div class="gf-track"><div class="gf-fill" id="g3-stemp-bar"></div></div><span class="gf-num" id="g3-stemp-lbl">--</span></div>
+        </div>
+      </div>
+      <div class="growth-recs" id="g3-recs"></div>
+    </div>
+
+    <!-- Zone 4 -->
+    <div class="growth-card" id="g4-card">
+      <div class="growth-hd">
+        <div class="growth-hd-left">
+          <div class="zone-badge z4">Z4</div>
+          <div>
+            <div class="growth-title">สนามหญ้า</div>
+            <div class="growth-crop-row">
+              <span class="crop-icon" id="g4-crop-icon">🌱</span>
+              <select class="crop-sel" id="g4-crop-sel" onchange="setZoneCrop(3, this.value)">
+                <option value="vegetable">🥬 ผักทั่วไป</option>
+                <option value="tomato">🍅 มะเขือเทศ</option>
+                <option value="basil">🌿 กะเพรา/โหระพา</option>
+                <option value="chili">🌶️ พริก</option>
+                <option value="lettuce">🥗 ผักกาดหอม</option>
+                <option value="rice">🌾 ข้าว</option>
+                <option value="grass">🌱 สนามหญ้า</option>
+                <option value="tree">🌳 ต้นไม้ทั่วไป</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <span class="growth-badge" id="g4-badge">--</span>
+      </div>
+      <div class="growth-body">
+        <div class="growth-ring-wrap">
+          <svg viewBox="0 0 70 70" class="growth-svg">
+            <circle cx="35" cy="35" r="28" class="growth-ring-bg"/>
+            <circle cx="35" cy="35" r="28" class="growth-ring-fill" id="g4-ring"
+                    style="stroke-dasharray:0 175.9" transform="rotate(-90 35 35)"/>
+          </svg>
+          <div class="growth-ring-inner">
+            <div class="growth-score" id="g4-score">--</div>
+            <div class="growth-score-lbl">คะแนน</div>
+          </div>
+        </div>
+        <div class="growth-factors">
+          <div class="gf-row"><span class="gf-lbl">💧 ดิน</span><div class="gf-track"><div class="gf-fill" id="g4-soil-bar" style="background:#334155;width:2%"></div></div><span class="gf-num" id="g4-soil-lbl">N/A</span></div>
+          <div class="gf-row"><span class="gf-lbl">🌡️ อุณหภูมิ</span><div class="gf-track"><div class="gf-fill" id="g4-temp-bar"></div></div><span class="gf-num" id="g4-temp-lbl">--</span></div>
+          <div class="gf-row"><span class="gf-lbl">🌫️ ความชื้น</span><div class="gf-track"><div class="gf-fill" id="g4-humid-bar"></div></div><span class="gf-num" id="g4-humid-lbl">--</span></div>
+          <div class="gf-row"><span class="gf-lbl">☀️ แสง</span><div class="gf-track"><div class="gf-fill" id="g4-light-bar"></div></div><span class="gf-num" id="g4-light-lbl">--</span></div>
+          <div class="gf-row"><span class="gf-lbl">🌱 อุณหภูมิดิน</span><div class="gf-track"><div class="gf-fill" id="g4-stemp-bar"></div></div><span class="gf-num" id="g4-stemp-lbl">--</span></div>
+        </div>
+      </div>
+      <div class="growth-recs" id="g4-recs"></div>
+    </div>
+
+  </div>
+
+  <!-- Growth Trend Chart -->
+  <div class="chart-card" style="margin-bottom:12px">
+    <div class="chart-title">📈 แนวโน้ม Growth Score — Zone 1 &amp; 2</div>
+    <div class="chart-canvas"><canvas id="growthChart"></canvas></div>
+  </div>
+
+  <!-- Sensor Simulator -->
+  <div class="gsim-panel" id="gsim-panel">
+    <div class="gsim-header">
+      <div class="gsim-header-left">
+        <div class="gsim-title">🧪 Sensor Simulator</div>
+        <div class="gsim-hint" id="gsim-hint">ปรับค่าเซนเซอร์เพื่อดูผลกระทบต่อ Growth Score แบบ Real-time</div>
+      </div>
+      <div class="gsim-header-right">
+        <span class="gsim-status-badge" id="gsim-status-badge">🟢 Preview Mode</span>
+        <div class="gsim-toggle-row">
+          <span class="gsim-toggle-lbl">ควบคุม Cards</span>
+          <label class="toggle">
+            <input type="checkbox" id="gsim-override-cb" onchange="toggleGrowthSimOverride(this.checked)">
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div class="gsim-body">
+
+      <!-- Sliders -->
+      <div class="gsim-sliders">
+        <div class="gsim-sliders-title">ปรับค่าเซนเซอร์</div>
+        <div class="gsim-row">
+          <span class="gsim-lbl">💧 ดิน Z1</span>
+          <input type="range" class="gsim-range" id="sim-soil1" min="0" max="100" step="1" value="55" oninput="onGrowthSimChange()">
+          <span class="gsim-val" id="sim-soil1-val">55%</span>
+        </div>
+        <div class="gsim-row">
+          <span class="gsim-lbl">💧 ดิน Z2</span>
+          <input type="range" class="gsim-range" id="sim-soil2" min="0" max="100" step="1" value="60" oninput="onGrowthSimChange()">
+          <span class="gsim-val" id="sim-soil2-val">60%</span>
+        </div>
+        <div class="gsim-row">
+          <span class="gsim-lbl">🌡️ อุณหภูมิ</span>
+          <input type="range" class="gsim-range" id="sim-temp" min="10" max="50" step="0.5" value="29" oninput="onGrowthSimChange()">
+          <span class="gsim-val" id="sim-temp-val">29°C</span>
+        </div>
+        <div class="gsim-row">
+          <span class="gsim-lbl">🌫️ ความชื้น</span>
+          <input type="range" class="gsim-range" id="sim-humid" min="0" max="100" step="1" value="65" oninput="onGrowthSimChange()">
+          <span class="gsim-val" id="sim-humid-val">65%</span>
+        </div>
+        <div class="gsim-row">
+          <span class="gsim-lbl">☀️ แสง</span>
+          <input type="range" class="gsim-range" id="sim-light" min="0" max="100000" step="500" value="25000" oninput="onGrowthSimChange()">
+          <span class="gsim-val" id="sim-light-val">25 klux</span>
+        </div>
+        <div class="gsim-row">
+          <span class="gsim-lbl">🌱 อุณหภูมิดิน</span>
+          <input type="range" class="gsim-range" id="sim-stemp" min="10" max="45" step="0.5" value="26" oninput="onGrowthSimChange()">
+          <span class="gsim-val" id="sim-stemp-val">26°C</span>
+        </div>
+        <div class="gsim-opt-note">
+          <span class="gsim-opt-swatch"></span> ช่วงสีเขียวบน slider = ช่วงค่าที่เหมาะสม (Optimal Range)
+        </div>
+      </div>
+
+      <!-- Preview Cards -->
+      <div class="gsim-preview">
+        <div class="gsim-preview-title">📊 Growth Score Preview</div>
+        <div class="gsim-preview-zones">
+
+          <div class="gsim-zone-card">
+            <div class="gsim-zone-hd"><div class="zone-badge z1" style="font-size:0.65rem;padding:2px 8px">Z1</div></div>
+            <div class="gsim-ring-wrap">
+              <svg viewBox="0 0 54 54" class="gsim-svg">
+                <circle cx="27" cy="27" r="22" class="gsim-ring-bg"/>
+                <circle cx="27" cy="27" r="22" class="gsim-ring-fill" id="sim-z1-ring"
+                        style="stroke-dasharray:0 138.2" transform="rotate(-90 27 27)"/>
+              </svg>
+              <div class="gsim-ring-inner">
+                <div class="gsim-ring-score" id="sim-z1-score">--</div>
+              </div>
+            </div>
+            <div class="gsim-zone-badge" id="sim-z1-badge">--</div>
+          </div>
+
+          <div class="gsim-zone-card">
+            <div class="gsim-zone-hd"><div class="zone-badge z2" style="font-size:0.65rem;padding:2px 8px">Z2</div></div>
+            <div class="gsim-ring-wrap">
+              <svg viewBox="0 0 54 54" class="gsim-svg">
+                <circle cx="27" cy="27" r="22" class="gsim-ring-bg"/>
+                <circle cx="27" cy="27" r="22" class="gsim-ring-fill" id="sim-z2-ring"
+                        style="stroke-dasharray:0 138.2" transform="rotate(-90 27 27)"/>
+              </svg>
+              <div class="gsim-ring-inner">
+                <div class="gsim-ring-score" id="sim-z2-score">--</div>
+              </div>
+            </div>
+            <div class="gsim-zone-badge" id="sim-z2-badge">--</div>
+          </div>
+
+          <div class="gsim-zone-card">
+            <div class="gsim-zone-hd"><div class="zone-badge z3" style="font-size:0.65rem;padding:2px 8px">Z3</div></div>
+            <div class="gsim-ring-wrap">
+              <svg viewBox="0 0 54 54" class="gsim-svg">
+                <circle cx="27" cy="27" r="22" class="gsim-ring-bg"/>
+                <circle cx="27" cy="27" r="22" class="gsim-ring-fill" id="sim-z3-ring"
+                        style="stroke-dasharray:0 138.2" transform="rotate(-90 27 27)"/>
+              </svg>
+              <div class="gsim-ring-inner">
+                <div class="gsim-ring-score" id="sim-z3-score">--</div>
+              </div>
+            </div>
+            <div class="gsim-zone-badge" id="sim-z3-badge">--</div>
+          </div>
+
+          <div class="gsim-zone-card">
+            <div class="gsim-zone-hd"><div class="zone-badge z4" style="font-size:0.65rem;padding:2px 8px">Z4</div></div>
+            <div class="gsim-ring-wrap">
+              <svg viewBox="0 0 54 54" class="gsim-svg">
+                <circle cx="27" cy="27" r="22" class="gsim-ring-bg"/>
+                <circle cx="27" cy="27" r="22" class="gsim-ring-fill" id="sim-z4-ring"
+                        style="stroke-dasharray:0 138.2" transform="rotate(-90 27 27)"/>
+              </svg>
+              <div class="gsim-ring-inner">
+                <div class="gsim-ring-score" id="sim-z4-score">--</div>
+              </div>
+            </div>
+            <div class="gsim-zone-badge" id="sim-z4-badge">--</div>
+          </div>
+
+        </div>
+
+        <div class="gsim-legend">
+          <div class="gsim-legend-item"><span style="color:#22c55e">●</span> ≥80 เจริญเติบโตดี</div>
+          <div class="gsim-legend-item"><span style="color:#f59e0b">●</span> ≥60 ปานกลาง</div>
+          <div class="gsim-legend-item"><span style="color:#f97316">●</span> ≥40 ควรปรับปรุง</div>
+          <div class="gsim-legend-item"><span style="color:#ef4444">●</span> &lt;40 ต้องดูแลเร่งด่วน</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  </div><!-- /growth -->
+
+  <!-- Environment Sensors -->
+  <div data-section="sensors">
+  <div class="section-title">สภาพแวดล้อม (Environment)</div>
+  <div class="sensor-grid">
+
+    <div class="sensor-card card-temp">
+      <div class="card-header">
+        <div>
+          <div class="card-label">อุณหภูมิอากาศ</div>
+          <div class="card-proto">DHT22 · 1-Wire</div>
+        </div>
+        <div class="card-icon">🌡️</div>
+      </div>
+      <div class="card-value" id="temp-val">--<span class="card-unit">°C</span></div>
+      <div class="progress-bar"><div class="progress-fill fill-yellow" id="temp-bar" style="width:0%"></div></div>
+      <div class="card-status status-ok" id="temp-status"><span class="status-dot"></span>ปกติ</div>
+      <div class="sparkline-wrap"><canvas id="spark-temp"></canvas></div>
+    </div>
+
+    <div class="sensor-card card-humid">
+      <div class="card-header">
+        <div>
+          <div class="card-label">ความชื้นอากาศ</div>
+          <div class="card-proto">DHT22 · 1-Wire</div>
+        </div>
+        <div class="card-icon">🌫️</div>
+      </div>
+      <div class="card-value" id="humid-val">--<span class="card-unit">%</span></div>
+      <div class="progress-bar"><div class="progress-fill fill-blue" id="humid-bar" style="width:0%"></div></div>
+      <div class="card-status status-ok" id="humid-status"><span class="status-dot"></span>ปกติ</div>
+      <div class="sparkline-wrap"><canvas id="spark-humid"></canvas></div>
+    </div>
+
+    <div class="sensor-card card-stemp">
+      <div class="card-header">
+        <div>
+          <div class="card-label">อุณหภูมิดิน</div>
+          <div class="card-proto">DS18B20 · OneWire</div>
+        </div>
+        <div class="card-icon">🌱</div>
+      </div>
+      <div class="card-value" id="stemp-val">--<span class="card-unit">°C</span></div>
+      <div class="progress-bar"><div class="progress-fill fill-cyan" id="stemp-bar" style="width:0%"></div></div>
+      <div class="card-status status-ok" id="stemp-status"><span class="status-dot"></span>ปกติ</div>
+      <div class="sparkline-wrap"><canvas id="spark-stemp"></canvas></div>
+    </div>
+
+    <div class="sensor-card card-light">
+      <div class="card-header">
+        <div>
+          <div class="card-label">ความเข้มแสง</div>
+          <div class="card-proto">BH1750 · I2C / LDR · Analog</div>
+        </div>
+        <div class="card-icon">☀️</div>
+      </div>
+      <div class="card-value" id="light-val">--<span class="card-unit">lux</span></div>
+      <div class="progress-bar"><div class="progress-fill fill-yellow" id="light-bar" style="width:0%"></div></div>
+      <div class="card-status status-ok" id="light-status"><span class="status-dot"></span>ปกติ</div>
+      <div class="sparkline-wrap"><canvas id="spark-light"></canvas></div>
+    </div>
+
+    <div class="sensor-card card-pressure">
+      <div class="card-header">
+        <div>
+          <div class="card-label">ความดันอากาศ</div>
+          <div class="card-proto">BME280 · I2C</div>
+        </div>
+        <div class="card-icon">🌬️</div>
+      </div>
+      <div class="card-value" id="pressure-val">--<span class="card-unit">hPa</span></div>
+      <div class="progress-bar"><div class="progress-fill fill-cyan" id="pressure-bar" style="width:0%"></div></div>
+      <div class="card-status status-ok" id="pressure-status"><span class="status-dot"></span>ปกติ</div>
+      <div class="sparkline-wrap"><canvas id="spark-pressure"></canvas></div>
+    </div>
+
+    <div class="sensor-card card-rain">
+      <div class="card-header">
+        <div>
+          <div class="card-label">ตรวจจับฝน</div>
+          <div class="card-proto">Rain Sensor · Analog</div>
+        </div>
+        <div class="card-icon">🌧️</div>
+      </div>
+      <div class="card-value" id="rain-val">--<span class="card-unit">%</span></div>
+      <div class="progress-bar"><div class="progress-fill fill-blue" id="rain-bar" style="width:0%"></div></div>
+      <div class="card-status status-ok" id="rain-status"><span class="status-dot"></span>ไม่มีฝน</div>
+      <div class="sparkline-wrap"><canvas id="spark-rain"></canvas></div>
+    </div>
+
+    <div class="sensor-card card-wlevel">
+      <div class="card-header">
+        <div>
+          <div class="card-label">ระดับน้ำในถัง</div>
+          <div class="card-proto">HC-SR04 · Ultrasonic</div>
+        </div>
+        <div class="card-icon">🪣</div>
+      </div>
+      <div class="card-value" id="wlevel-val">--<span class="card-unit">%</span></div>
+      <div class="progress-bar"><div class="progress-fill fill-blue" id="wlevel-bar" style="width:0%"></div></div>
+      <div class="card-status status-ok" id="wlevel-status"><span class="status-dot"></span>ปกติ</div>
+      <div class="sparkline-wrap"><canvas id="spark-wlevel"></canvas></div>
+    </div>
+
+    <div class="sensor-card card-flow">
+      <div class="card-header">
+        <div>
+          <div class="card-label">อัตราไหลน้ำ</div>
+          <div class="card-proto">YF-S201 · Pulse</div>
+        </div>
+        <div class="card-icon">💦</div>
+      </div>
+      <div class="card-value" id="flow-val">--<span class="card-unit">L/min</span></div>
+      <div class="progress-bar"><div class="progress-fill fill-green" id="flow-bar" style="width:0%"></div></div>
+      <div class="card-status status-ok" id="flow-status"><span class="status-dot"></span>หยุด</div>
+      <div class="sparkline-wrap"><canvas id="spark-flow"></canvas></div>
+    </div>
+
+  </div>
+
+  </div><!-- /sensors -->
+
+  <!-- Charts -->
+  <div data-section="charts">
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-top:28px;margin-bottom:12px;">
+    <div class="section-title" style="margin:0">กราฟย้อนหลัง</div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <div class="chart-range-tabs">
+        <button class="chart-range-btn active" id="range-30m" onclick="setChartRange('30m')">30 นาที</button>
+        <button class="chart-range-btn" id="range-1h" onclick="setChartRange('1h')">1 ชั่วโมง</button>
+        <button class="chart-range-btn" id="range-2h" onclick="setChartRange('2h')">2 ชั่วโมง</button>
+      </div>
+      <button class="export-btn" onclick="exportCSV()">⬇ CSV</button>
+    </div>
+  </div>
+  <div class="charts-grid">
+    <div class="chart-card">
+      <div class="chart-title">ความชื้นดิน Zone 1 &amp; 2</div>
+      <div class="chart-canvas"><canvas id="chartSoil"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">อุณหภูมิ &amp; ความชื้นอากาศ</div>
+      <div class="chart-canvas"><canvas id="chartEnv"></canvas></div>
+    </div>
+  </div>
+
+  </div><!-- /charts -->
+
+  <!-- Predictive Alerts -->
+  <div data-section="prediction">
+  <div class="section-title" style="margin-top:28px">🔮 การทำนายแนวโน้ม</div>
+  <div class="pred-card">
+    <div class="pred-card-hint">ระบบวิเคราะห์แนวโน้มเซนเซอร์ล่าสุด — ต้องการข้อมูลอย่างน้อย 20 วินาทีเพื่อเริ่มทำนาย</div>
+    <div id="pred-list"><div class="pred-empty">กำลังเก็บข้อมูล...</div></div>
+  </div>
+  </div><!-- /prediction -->
+
+  <!-- Irrigation Scheduler -->
+  <div data-section="scheduler">
+  <div class="section-title" style="margin-top:28px">📅 ตารางรดน้ำอัตโนมัติ</div>
+  <div class="sched-card">
+    <div class="sched-toolbar">
+      <div class="sched-toolbar-info">ตั้งตารางรดน้ำรายสัปดาห์ — วาล์วจะเปิดอัตโนมัติตามเวลาที่กำหนด</div>
+      <button class="feature-add-btn" id="sched-add-btn" onclick="toggleSchedForm()">＋ เพิ่มตาราง</button>
+    </div>
+    <div class="sched-form" id="sched-form" style="display:none">
+      <div class="sched-form-grid">
+        <div class="sched-field">
+          <label>ชื่อตาราง</label>
+          <input type="text" id="sched-label" placeholder="เช่น รดน้ำเช้า แปลงผัก A">
+        </div>
+        <div class="sched-field">
+          <label>วาล์ว</label>
+          <select id="sched-zone">
+            <option value="0">วาล์ว 1 — แปลงผัก A</option>
+            <option value="1">วาล์ว 2 — แปลงผัก B</option>
+            <option value="2">วาล์ว 3 — ต้นไม้รอบรั้ว</option>
+            <option value="3">วาล์ว 4 — สนามหญ้า</option>
+          </select>
+        </div>
+        <div class="sched-field">
+          <label>เวลา</label>
+          <input type="time" id="sched-time" value="06:00">
+        </div>
+        <div class="sched-field">
+          <label>ระยะเวลา (นาที)</label>
+          <input type="number" id="sched-dur" value="10" min="0.5" max="120" step="0.5">
+        </div>
+        <div class="sched-field">
+          <label>เงื่อนไข</label>
+          <select id="sched-cond">
+            <option value="always">ทุกครั้ง</option>
+            <option value="if_dry">เมื่อดินแห้ง (< Threshold)</option>
+            <option value="no_rain">เมื่อไม่มีฝน (< 20%)</option>
+          </select>
+        </div>
+        <div class="sched-field sched-field-days">
+          <label>วันที่ทำงาน</label>
+          <div class="sched-days">
+            <label class="sched-day-lbl"><input type="checkbox" class="sched-day-cb" value="0"> อา</label>
+            <label class="sched-day-lbl"><input type="checkbox" class="sched-day-cb" value="1"> จ</label>
+            <label class="sched-day-lbl"><input type="checkbox" class="sched-day-cb" value="2"> อ</label>
+            <label class="sched-day-lbl"><input type="checkbox" class="sched-day-cb" value="3"> พ</label>
+            <label class="sched-day-lbl"><input type="checkbox" class="sched-day-cb" value="4"> พฤ</label>
+            <label class="sched-day-lbl"><input type="checkbox" class="sched-day-cb" value="5"> ศ</label>
+            <label class="sched-day-lbl"><input type="checkbox" class="sched-day-cb" value="6"> ส</label>
+          </div>
+        </div>
+      </div>
+      <div class="sched-form-footer">
+        <button class="feature-cancel-btn" onclick="toggleSchedForm(false)">ยกเลิก</button>
+        <button class="feature-save-btn" onclick="submitScheduleForm()">💾 บันทึกตาราง</button>
+      </div>
+    </div>
+    <div id="sched-list"></div>
+  </div>
+  </div><!-- /scheduler -->
+
+  <!-- Camera Widget -->
+  <div data-section="camera">
+  <div class="section-title" style="margin-top:28px">📷 กล้อง IP / ESP32-CAM</div>
+  <div class="feature-card">
+    <div class="feature-toolbar">
+      <div class="feature-toolbar-info">เพิ่มกล้อง MJPEG Stream, Snapshot หรือ RTSP URL</div>
+      <button class="feature-add-btn" id="cam-add-btn" onclick="toggleCamForm()">＋ เพิ่มกล้อง</button>
+    </div>
+    <div class="cam-form feature-form" id="cam-form" style="display:none">
+      <div class="feature-form-grid">
+        <div class="feature-field">
+          <label>ชื่อกล้อง</label>
+          <input type="text" id="cam-name" placeholder="เช่น กล้อง Zone 1, ESP32-CAM หน้าบ้าน">
+        </div>
+        <div class="feature-field">
+          <label>ประเภท</label>
+          <select id="cam-type">
+            <option value="mjpeg">MJPEG Stream (Real-time)</option>
+            <option value="snapshot">Snapshot (รีเฟรชทุก N วินาที)</option>
+            <option value="rtsp">RTSP URL (เปิดด้วย VLC)</option>
+          </select>
+        </div>
+        <div class="feature-field">
+          <label>URL กล้อง</label>
+          <input type="text" id="cam-url" placeholder="http://192.168.1.110:81/stream">
+        </div>
+        <div class="feature-field">
+          <label>รีเฟรชทุก (วินาที) — สำหรับ Snapshot</label>
+          <input type="number" id="cam-interval" value="5" min="1" max="60">
+        </div>
+      </div>
+      <div class="feature-form-footer">
+        <button class="feature-cancel-btn" onclick="toggleCamForm(false)">ยกเลิก</button>
+        <button class="feature-save-btn" onclick="submitCamForm()">💾 เพิ่มกล้อง</button>
+      </div>
+    </div>
+    <div class="cam-list" id="cam-list"></div>
+  </div>
+  </div><!-- /camera -->
+
+  <!-- Multi-Device Management -->
+  <div data-section="devices">
+  <div class="section-title" style="margin-top:28px">📱 อุปกรณ์หลายเครื่อง (Multi-Device)</div>
+  <div class="feature-card">
+    <div class="feature-toolbar">
+      <div class="feature-toolbar-info">จัดการ ESP32 หลายเครื่อง — กด "เชื่อมต่อ" เพื่อสลับ Dashboard ไปยังอุปกรณ์นั้น</div>
+      <button class="feature-add-btn" id="dev-add-btn" onclick="toggleDevForm()">＋ เพิ่มอุปกรณ์</button>
+    </div>
+    <div class="dev-form feature-form" id="dev-form" style="display:none">
+      <div class="feature-form-grid">
+        <div class="feature-field">
+          <label>ชื่ออุปกรณ์</label>
+          <input type="text" id="dev-name" placeholder="เช่น ESP32 แปลงผัก A, โรงเรือน B">
+        </div>
+        <div class="feature-field">
+          <label>โหมดเชื่อมต่อ</label>
+          <select id="dev-mode">
+            <option value="sim">🎲 Simulation</option>
+            <option value="ws">🔗 WebSocket</option>
+            <option value="rest">🌐 REST API</option>
+          </select>
+        </div>
+        <div class="feature-field">
+          <label>URL (สำหรับ WS/REST)</label>
+          <input type="text" id="dev-url" placeholder="ws://192.168.1.100/ws หรือ http://192.168.1.100/sensors">
+        </div>
+      </div>
+      <div class="feature-form-footer">
+        <button class="feature-cancel-btn" onclick="toggleDevForm(false)">ยกเลิก</button>
+        <button class="feature-save-btn" onclick="submitDeviceForm()">💾 เพิ่มอุปกรณ์</button>
+      </div>
+    </div>
+    <div id="devices-list"></div>
+  </div>
+  </div><!-- /devices -->
+
+  <!-- Settings -->
+  <div data-section="settings">
+  <div class="section-title">ตั้งค่า</div>
+
+  <!-- Connection Settings -->
+  <div class="settings-card" style="margin-bottom:12px">
+    <div class="settings-header" onclick="toggleConnSettings()">
+      <span>🔌 การเชื่อมต่ออุปกรณ์</span>
+      <span id="conn-arrow">▼</span>
+    </div>
+    <div class="settings-body" id="conn-body">
+      <div style="font-size:0.82rem;color:var(--muted);margin-bottom:14px">เลือกแหล่งข้อมูลสำหรับ Dashboard</div>
+      <div class="conn-mode-btns">
+        <button class="conn-mode-btn active" data-mode="sim"  onclick="selectConnMode('sim')">🎲 Simulation</button>
+        <button class="conn-mode-btn"        data-mode="ws"   onclick="selectConnMode('ws')">🔗 WebSocket</button>
+        <button class="conn-mode-btn"        data-mode="rest" onclick="selectConnMode('rest')">🌐 REST API</button>
+      </div>
+      <div class="conn-url-row" id="conn-url-row" style="display:none">
+        <input type="text" class="conn-url-input" id="conn-url" placeholder="ws://192.168.1.100/ws">
+      </div>
+      <button class="conn-apply-btn" onclick="applyConnSettings()">🔌 เชื่อมต่อ</button>
+      <div class="conn-hint">
+        <b>Simulation</b> — จำลองข้อมูลแบบ Random Walk ไม่ต้องใช้ Hardware<br>
+        <b>WebSocket</b> — เชื่อมต่อ ESP32 โดยตรง เช่น <code>ws://192.168.1.100/ws</code><br>
+        <b>REST API</b> — ดึงข้อมูลทุก 3 วินาที เช่น <code>http://192.168.1.100/sensors</code>
+      </div>
+    </div>
+  </div>
+
+  <!-- Threshold Settings -->
+  <div class="settings-card">
+    <div class="settings-header" onclick="toggleSettings()">
+      <span>⚙️ ค่าขีดจำกัดเซนเซอร์ (Thresholds)</span>
+      <span id="settings-arrow">▼</span>
+    </div>
+    <div class="settings-body" id="settings-body">
+      <div class="threshold-grid">
+        <div class="threshold-row">
+          <label>ความชื้นดิน — แห้งเกิน (เปิดวาล์วอัตโนมัติ)</label>
+          <input type="range" id="th-dry" min="10" max="50" value="30"
+                 oninput="updateThreshold('dry', this.value)">
+          <span class="threshold-val">เปิดเมื่อ &le; <b id="th-dry-val">30</b>%</span>
+        </div>
+        <div class="threshold-row">
+          <label>ความชื้นดิน — ชื้นพอ (ปิดวาล์วอัตโนมัติ)</label>
+          <input type="range" id="th-wet" min="50" max="95" value="70"
+                 oninput="updateThreshold('wet', this.value)">
+          <span class="threshold-val">ปิดเมื่อ &ge; <b id="th-wet-val">70</b>%</span>
+        </div>
+        <div class="threshold-row">
+          <label>อุณหภูมิอากาศ — ร้อนเกิน (แจ้งเตือน)</label>
+          <input type="range" id="th-temp" min="30" max="50" value="38"
+                 oninput="updateThreshold('temp', this.value)">
+          <span class="threshold-val">แจ้งเตือนเมื่อ &ge; <b id="th-temp-val">38</b>&deg;C</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LINE Notify + Webhook -->
+  <div class="settings-card" style="margin-bottom:12px">
+    <div class="settings-header" onclick="toggleNotifySettings()">
+      <span>🔔 LINE Notify / Webhook</span>
+      <span id="notify-arrow">▼</span>
+    </div>
+    <div class="settings-body" id="notify-body">
+      <div style="font-size:0.82rem;color:var(--muted);margin-bottom:14px">
+        ส่งการแจ้งเตือนไปยัง LINE หรือ Webhook เมื่อมี Alert ระดับ Warn/Alert
+      </div>
+      <div class="notify-config-grid">
+        <div class="notify-field">
+          <label>LINE Notify Token</label>
+          <input type="password" id="notify-line-token" placeholder="วาง Token จาก notify.line.me/th_TH/">
+        </div>
+        <div class="notify-field">
+          <label>Webhook URL (POST JSON)</label>
+          <input type="text" id="notify-webhook-url" placeholder="https://hooks.example.com/...">
+        </div>
+      </div>
+      <div class="notify-enable-row">
+        <label class="toggle" style="transform:scale(0.9)">
+          <input type="checkbox" id="notify-enabled">
+          <span class="slider"></span>
+        </label>
+        <span style="font-size:0.85rem">เปิดใช้งานการแจ้งเตือนภายนอก</span>
+      </div>
+      <div class="notify-btns">
+        <button class="conn-apply-btn" onclick="applyNotifyConfig()">💾 บันทึก</button>
+        <button class="conn-apply-btn" style="background:var(--surface2)" onclick="testNotify()">🧪 ทดสอบ</button>
+      </div>
+      <div class="notify-log-title">ประวัติการส่ง</div>
+      <div id="notify-log" class="notify-log"></div>
+    </div>
+  </div>
+
+  </div><!-- /settings -->
+
+  <!-- Alert Log -->
+  <div class="section-title">บันทึกแจ้งเตือน</div>
+  <div class="alert-log">
+    <div class="alert-log-header">
+      <span>Alert Log</span>
+      <div class="alert-log-right">
+        <span class="alert-badge" id="alert-count">0</span>
+        <button class="clear-btn" onclick="clearAlerts()">ลบทั้งหมด</button>
+      </div>
+    </div>
+    <div class="alert-list" id="alert-list">
+      <div class="alert-item">
+        <div class="alert-type a-info">ℹ</div>
+        <div class="alert-msg">ระบบเริ่มทำงาน — Mock Data Mode</div>
+        <div class="alert-time" id="start-time">--:--</div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<!-- ── Plugin Modal ── -->
+<div id="plugin-modal" class="plugin-modal-overlay" style="display:none" onclick="closePluginModal(event)">
+  <div class="plugin-modal">
+    <div class="pm-header">
+      <span class="pm-title">＋ เพิ่ม Sensor ใหม่</span>
+      <button class="pm-close" onclick="document.getElementById('plugin-modal').style.display='none'">✕</button>
+    </div>
+    <div class="pm-body">
+      <div class="pm-field">
+        <label>ชื่อ Sensor</label>
+        <input type="text" id="pm-name" placeholder="เช่น ความชื้นดิน Zone 3, pH แปลงผัก">
+      </div>
+      <div class="pm-field">
+        <label>ประเภท Sensor</label>
+        <select id="pm-type" onchange="onPluginTypeChange()">
+          <option value="soil">💧 ความชื้นดิน</option>
+          <option value="temp">🌡️ อุณหภูมิ</option>
+          <option value="humid">🌫️ ความชื้นอากาศ</option>
+          <option value="light">☀️ แสง (Lux)</option>
+          <option value="pressure">🌬️ ความดันอากาศ (hPa)</option>
+          <option value="rain">🌧️ ตรวจจับฝน</option>
+          <option value="waterlevel">🪣 ระดับน้ำในถัง</option>
+          <option value="flow">💦 อัตราไหลน้ำ (L/min)</option>
+          <option value="ph">🧪 pH</option>
+          <option value="ec">⚡ EC (ค่าการนำไฟฟ้า)</option>
+          <option value="co2">💨 CO₂</option>
+          <option value="custom">📡 กำหนดเอง</option>
+        </select>
+      </div>
+      <div class="pm-field">
+        <label>Data Key <span class="pm-hint">— กุญแจใน JSON ของ ESP32</span></label>
+        <input type="text" id="pm-datakey" placeholder="เช่น soil3, ph, ec, light1" oninput="onDataKeyInput()">
+        <div class="pm-example">ตัวอย่าง JSON จาก ESP32: <code>{"<span id="pm-key-preview">soil3</span>": 55.2, ...}</code></div>
+      </div>
+      <div class="pm-row">
+        <div class="pm-field pm-field-sm">
+          <label>หน่วย</label>
+          <input type="text" id="pm-unit" placeholder="%">
+        </div>
+        <div class="pm-field pm-field-sm">
+          <label>ค่าต่ำสุด</label>
+          <input type="number" id="pm-min" placeholder="0">
+        </div>
+        <div class="pm-field pm-field-sm">
+          <label>ค่าสูงสุด</label>
+          <input type="number" id="pm-max" placeholder="100">
+        </div>
+      </div>
+      <div class="pm-field">
+        <label>Protocol / ช่องทาง <span class="pm-hint">— ข้อมูลประกอบเท่านั้น</span></label>
+        <input type="text" id="pm-proto" placeholder="เช่น SDI-12, I2C, Analog · ADC">
+      </div>
+    </div>
+    <div class="pm-footer">
+      <button class="pm-cancel" onclick="document.getElementById('plugin-modal').style.display='none'">ยกเลิก</button>
+      <button class="pm-add" onclick="confirmAddPlugin()">＋ เพิ่ม Sensor</button>
+    </div>
+  </div>
+</div>
+
+<!-- JS โหลดที่ท้าย body เรียงตามลำดับ dependency -->
+<!-- 1.  state.js         — thresholds, state, localStorage -->
+<!-- 2.  alerts.js        — addAlert, sendExternalNotify guard -->
+<!-- 3.  charts.js        — initCharts, renderCharts, makeSparkline -->
+<!-- 4.  valves.js        — setValveState, manualValve, resetToAuto -->
+<!-- 5.  sensors.js       — simulate, updateUI -->
+<!-- 6.  notifications.js — toggleNotifications, sendNotification -->
+<!-- 7.  timer.js         — startValveTimer, startValveTimerProgrammatic -->
+<!-- 8.  weather.js       — fetchWeather -->
+<!-- 9.  plugins.js       — initPlugins, openPluginModal -->
+<!-- 10. connection.js    — initConnection, connectToDevice -->
+<!-- 11. crops.js         — CROP_PROFILES, getZoneOpt, setZoneCrop -->
+<!-- 12. growth.js        — initGrowth, updateGrowthAnalysis (ต้องการ crops.js) -->
+<!-- 13. db.js            — IndexedDB persistence -->
+<!-- 14. prediction.js    — updatePredictions -->
+<!-- 15. scheduler.js     — initScheduler, renderSchedules -->
+<!-- 16. notify.js        — sendExternalNotify, LINE/Webhook -->
+<!-- 17. camera.js        — initCamera, renderCameras -->
+<!-- 18. devices.js       — initDevices, renderDevices -->
+<!-- 19. app.js           — boot IIFE + section visibility -->
+<script src="js/state.js"></script>
+<script src="js/alerts.js"></script>
+<script src="js/charts.js"></script>
+<script src="js/valves.js"></script>
+<script src="js/sensors.js"></script>
+<script src="js/notifications.js"></script>
+<script src="js/timer.js"></script>
+<script src="js/weather.js"></script>
+<script src="js/plugins.js"></script>
+<script src="js/connection.js"></script>
+<script src="js/crops.js"></script>
+<script src="js/growth.js"></script>
+<script src="js/db.js"></script>
+<script src="js/prediction.js"></script>
+<script src="js/scheduler.js"></script>
+<script src="js/notify.js"></script>
+<script src="js/camera.js"></script>
+<script src="js/devices.js"></script>
+<script src="js/app.js"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+</script>
+
+</body>
+</html>

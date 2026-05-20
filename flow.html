@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Smart Farm — Node Flow</title>
+  <link rel="stylesheet" href="css/flow.css">
+</head>
+<body>
+
+<header>
+  <div class="logo">🌿 Smart Farm — Node Flow</div>
+  <div class="nav-links">
+    <a class="nav-btn" href="index.html">📊 Dashboard</a>
+    <a class="nav-btn active" href="flow.html">🔀 Flow</a>
+    <a class="nav-btn" href="guide.html">📖 คู่มือ</a>
+  </div>
+  <div class="header-right">
+    <div class="live-badge"><span class="live-dot"></span> Live Simulation</div>
+    <div class="sync-badge" id="syncBadge">🔗 Syncing…</div>
+    <span id="clock">--:--:--</span>
+  </div>
+</header>
+
+<div class="layout">
+  <div class="canvas-wrap">
+    <canvas id="flowCanvas"></canvas>
+    <div class="legend">
+      <div class="legend-title">Node Type</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#22c55e"></div> Sensor</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#3b82f6"></div> Controller (ESP32)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#f59e0b"></div> Actuator (Valve)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#a855f7"></div> Network / Cloud</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#06b6d4"></div> Output / Alert</div>
+    </div>
+  </div>
+
+  <div class="detail-panel collapsed" id="detailPanel">
+    <div class="panel-header">
+      <span class="panel-title" id="panelTitle">Node Detail</span>
+      <span class="panel-close" onclick="closePanel()">✕</span>
+    </div>
+    <div class="panel-body" id="panelBody"></div>
+  </div>
+</div>
+
+<div class="stats-bar">
+  <div class="stat-item">
+    <div class="stat-item-lbl">Packets/min</div>
+    <div class="stat-item-val" id="sb-ppm" style="color:var(--cyan)">--</div>
+  </div>
+  <div class="stat-item">
+    <div class="stat-item-lbl">Avg Latency</div>
+    <div class="stat-item-val" id="sb-lat" style="color:var(--green)">-- ms</div>
+  </div>
+  <div class="stat-item">
+    <div class="stat-item-lbl">Packet Loss</div>
+    <div class="stat-item-val" id="sb-loss" style="color:var(--yellow)">--%</div>
+  </div>
+  <div class="stat-item">
+    <div class="stat-item-lbl">Nodes Online</div>
+    <div class="stat-item-val" id="sb-nodes" style="color:var(--green)">--</div>
+  </div>
+  <div class="stat-item">
+    <div class="stat-item-lbl">Active Valves</div>
+    <div class="stat-item-val" id="sb-valves" style="color:var(--yellow)">--</div>
+  </div>
+  <div class="stat-item">
+    <div class="stat-item-lbl">Alerts Today</div>
+    <div class="stat-item-val" id="sb-alerts" style="color:var(--red)">--</div>
+  </div>
+  <div class="stat-item">
+    <div class="stat-item-lbl">Data Today</div>
+    <div class="stat-item-val" id="sb-data" style="color:var(--purple)">-- KB</div>
+  </div>
+</div>
+
+<!-- flow.js ประกอบด้วย logic ทั้งหมดของหน้านี้ -->
+<script src="js/flow.js"></script>
+
+</body>
+</html>
