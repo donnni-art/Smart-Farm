@@ -37,6 +37,7 @@ function _checkSchedules() {
     // เปิดวาล์วและเริ่มนับเวลา
     state.valveManual[s.zone] = true;
     setValveState(s.zone, true);
+    if (typeof sendValveCommand === 'function') sendValveCommand(s.zone, true);
     if (s.duration > 0 && typeof startValveTimerProgrammatic === 'function') {
       startValveTimerProgrammatic(s.zone, s.duration);
     }

@@ -2,10 +2,12 @@
 // สลับแหล่งข้อมูล: Simulation (mock) หรือ Hardware จริง (WebSocket / REST API)
 // เพิ่ม load order: หลัง sensors.js
 
-let _simTimer     = null;
-let _restTimer    = null;
-let _ws           = null;
-let _threshSynced = false;  // กัน sendThresholds ซ้ำใน REST polling
+let _simTimer          = null;
+let _restTimer         = null;
+let _ws                = null;
+let _threshSynced      = false;  // กัน sendThresholds ซ้ำใน REST polling
+let _wsReconnectTimer  = null;
+let _wsReconnectDelay  = 3000;   // เริ่มที่ 3s, backoff สูงสุด 30s
 
 const conn = { mode: 'sim', url: '' };
 
@@ -76,10 +78,12 @@ function applyHardwareData(data) {
 }
 
 function _stopAll() {
-  if (_simTimer)  { clearInterval(_simTimer);  _simTimer  = null; }
-  if (_restTimer) { clearInterval(_restTimer); _restTimer = null; }
+  if (_simTimer)         { clearInterval(_simTimer);    _simTimer         = null; }
+  if (_restTimer)        { clearInterval(_restTimer);   _restTimer        = null; }
+  if (_wsReconnectTimer) { clearTimeout(_wsReconnectTimer); _wsReconnectTimer = null; }
   if (_ws) { _ws.onclose = null; _ws.close(); _ws = null; }
-  _threshSynced = false;
+  _threshSynced     = false;
+  _wsReconnectDelay = 3000;
 }
 
 // ── ส่ง payload ไปยัง ESP32 ผ่าน WS หรือ REST endpoint ──
@@ -145,10 +149,26 @@ function _startWS(url) {
   _setBadge('linking');
   try {
     _ws = new WebSocket(url);
-    _ws.onopen    = () => { _setBadge('ws'); addAlert('ok', 'WebSocket เชื่อมต่อสำเร็จ: ' + url); sendThresholds(); };
-    _ws.onmessage = (e)  => { try { applyHardwareData(JSON.parse(e.data)); } catch(_) {} };
-    _ws.onerror   = ()   => { _setBadge('error'); addAlert('warn', 'WebSocket Error — ตรวจสอบ URL และ ESP32'); };
-    _ws.onclose   = ()   => { if (conn.mode === 'ws') _setBadge('error'); };
+    _ws.onopen = () => {
+      _setBadge('ws');
+      _wsReconnectDelay = 3000;  // reset backoff เมื่อเชื่อมต่อสำเร็จ
+      addAlert('ok', 'WebSocket เชื่อมต่อสำเร็จ: ' + url);
+      sendThresholds();
+    };
+    _ws.onmessage = (e) => { try { applyHardwareData(JSON.parse(e.data)); } catch(_) {} };
+    _ws.onerror   = ()  => { _setBadge('error'); };
+    _ws.onclose   = ()  => {
+      if (conn.mode !== 'ws') return;
+      _setBadge('error');
+      // Auto-reconnect พร้อม exponential backoff (3s → 6s → 12s → … สูงสุด 30s)
+      _wsReconnectTimer = setTimeout(() => {
+        if (conn.mode === 'ws' && conn.url) {
+          addAlert('info', `🔄 กำลังเชื่อมต่อใหม่… (${_wsReconnectDelay / 1000}s)`);
+          _wsReconnectDelay = Math.min(_wsReconnectDelay * 2, 30000);
+          _startWS(conn.url);
+        }
+      }, _wsReconnectDelay);
+    };
   } catch(_) {
     _setBadge('error');
     addAlert('warn', 'WebSocket URL ไม่ถูกต้อง');

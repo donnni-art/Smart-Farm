@@ -291,7 +291,17 @@ Browser จะส่งคำสั่งกลับ:
 
 ## Changelog
 
-### v1.7.0 — 2026-05-20 (ปัจจุบัน) — 8 New Features
+### v1.7.1 — 2026-05-20 (ปัจจุบัน) — Hardware Bug Fixes
+
+| # | บัค | ไฟล์ | รายละเอียด |
+|---|-----|------|-----------|
+| 1 | **Timer ไม่ส่งคำสั่งเปิดวาล์วไป ESP32** | `js/timer.js` | `startValveTimer()` เรียก `setValveState()` แต่ไม่เรียก `sendValveCommand()` → เพิ่ม call หลัง setValveState |
+| 2 | **Timer หมดเวลาแต่ relay ไม่ปิด** | `js/timer.js` | `tickAllTimers()` ปิดวาล์วใน UI แต่ไม่ส่ง `sendValveCommand(i, false)` → relay ยังเปิดอยู่ (น้ำไหลไม่หยุด!) |
+| 3 | **valveManual ไม่ reset สำหรับ valve 3&4** | `js/timer.js` | `tickAllTimers()` มี `if (i < 2)` guard — valve 3&4 mode ยังค้างเป็น Manual หลัง timer หมด |
+| 4 | **Scheduler ไม่ส่งคำสั่งวาล์วไป ESP32** | `js/scheduler.js` | `_checkSchedules()` เรียก `setValveState()` แต่ไม่เรียก `sendValveCommand()` → ตารางรดน้ำทำงานใน UI เท่านั้น |
+| 5 | **WebSocket ไม่มี auto-reconnect** | `js/connection.js` | WiFi ขาดครั้งเดียว → badge แสดง error ถาวร ต้อง reload หน้า — เพิ่ม exponential backoff (3s→6s→12s สูงสุด 30s) |
+
+### v1.7.0 — 2026-05-20 — 8 New Features
 
 | # | ฟีเจอร์ | ไฟล์ | รายละเอียด |
 |---|--------|------|-----------|

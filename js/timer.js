@@ -20,6 +20,7 @@ function startValveTimer(idx) {
   if (!state.valves[idx]) {
     state.valveManual[idx] = true;
     setValveState(idx, true);
+    if (typeof sendValveCommand === 'function') sendValveCommand(idx, true);
     const resetBtn = document.getElementById(`v${idx + 1}-reset`);
     if (resetBtn) resetBtn.disabled = false;
   }
@@ -51,14 +52,15 @@ function tickAllTimers() {
 
       if (valveTimerSecs[i] === 0) {
         // หมดเวลา — ปิดวาล์ว
-        if (state.valves[i]) setValveState(i, false);
-        // คืน Auto mode สำหรับ zone ที่มี Auto-irrigation (0 และ 1)
-        if (i < 2) {
-          state.valveManual[i] = false;
-          const resetBtn = document.getElementById(`v${i + 1}-reset`);
-          if (resetBtn) resetBtn.disabled = true;
-          updateValveUI(i);
+        if (state.valves[i]) {
+          setValveState(i, false);
+          if (typeof sendValveCommand === 'function') sendValveCommand(i, false);
         }
+        // คืน manual state สำหรับทุก zone
+        state.valveManual[i] = false;
+        const resetBtn = document.getElementById(`v${i + 1}-reset`);
+        if (resetBtn) resetBtn.disabled = true;
+        updateValveUI(i);
         addAlert('ok', `วาล์ว ${i + 1} ปิดอัตโนมัติ — หมดเวลารดน้ำ`);
         sendNotification('รดน้ำเสร็จแล้ว', `วาล์ว ${i + 1} ปิดอัตโนมัติแล้ว`);
         const input = document.getElementById(`v${i + 1}-timer-input`);
